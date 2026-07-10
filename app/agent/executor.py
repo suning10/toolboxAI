@@ -1,0 +1,48 @@
+"""
+LangChain 1.0 agent setup.
+
+Note the API shift from pre-1.0 LangChain: there's no more
+AgentExecutor + create_tool_calling_agent + manual prompt templates
+with agent_scratchpad placeholders. create_agent() builds a LangGraph
+ReAct loop for you - you just hand it a model, tools, and a system
+prompt.
+"""
+from langchain.agents import create_agent
+from app.llm.client import get_chat_model
+from app.tools.pandas_tool import describe_dataset, run_pandas_query
+from app.tools.sql_tool import run_sql_query
+
+SYSTEM_PROMPT = """You are a data analytics assistant for internal office use.
+
+You help analyze spreadsheet/CSV data that has been uploaded. Always call
+describe_dataset first if you haven't already seen the dataset's columns
+in this conversation - never guess column names.
+
+Prefer run_pandas_query for aggregations, filtering, and calculations.
+Use run_sql_query if the user explicitly asks for SQL or the question is
+naturally a join/group-by that reads more clearly as SQL.
+
+Keep tool calls minimal: describe once, then query directly. If a query
+errors, read the error, fix the column name or syntax, and retry once.
+If you still can't get it after one retry, explain what went wrong to
+the user instead of retrying indefinitely.
+"""
+
+# Keep the toolset small and focused. Local models degrade in tool-call
+# reliability once you hand them many tools at once - three well-scoped
+# tools beats ten loosely-scoped ones.
+TOOLS = [describe_dataset, run_pandas_query, run_sql_query]
+
+
+def build_agent():
+    """
+    Returns a compiled LangGraph agent. Call agent.invoke(...) or
+    agent.stream(...) on the result - see app/api/routes.py for usage.
+    """
+    model = get_chat_model()
+    agent = create_agent(
+        model=model,
+        tools=TOOLS,
+        system_prompt=SYSTEM_PROMPT,
+    )
+    return agent
