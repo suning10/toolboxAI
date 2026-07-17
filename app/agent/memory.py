@@ -5,13 +5,18 @@ create_agent() is built on LangGraph, so multi-turn memory works via a
 checkpointer keyed by thread_id - not the old ConversationBufferMemory
 object pattern from pre-1.0 LangChain.
 
-InMemorySaver is fine for a single-process, low-volume deployment
-(your <1000 calls/day case). If you later run multiple app instances
-behind a load balancer, swap this for a Redis or Postgres checkpointer
-so sessions survive across instances/restarts.
+SqliteSaver persists checkpoints to a real file, so conversation state
+survives process restarts (InMemorySaver loses everything on restart).
+Still a single file on one box - if you later run multiple app
+instances behind a load balancer, swap this for a Postgres checkpointer
+(langgraph-checkpoint-postgres) so sessions survive across instances.
 """
-from langgraph.checkpoint.memory import InMemorySaver
+import os
+import sqlite3
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.agents import create_agent
+from app.config import CHECKPOINT_DB_PATH
 from app.llm.client import get_chat_model
 from app.tools.pandas_tool import describe_dataset, run_pandas_query
 from app.tools.sql_tool import run_sql_query
@@ -20,7 +25,14 @@ from app.agent.executor import SYSTEM_PROMPT, TOOLS
 
 def build_agent_with_memory():
     model = get_chat_model()
-    checkpointer = InMemorySaver()
+
+    checkpoint_dir = os.path.dirname(CHECKPOINT_DB_PATH)
+    if checkpoint_dir:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+    conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
+    checkpointer = SqliteSaver(conn)
+    checkpointer.setup()
+
     agent = create_agent(
         model=model,
         tools=TOOLS,

@@ -46,25 +46,34 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 # 1. Upload a dataset
-curl -X POST http://localhost:8000/upload \
+curl -X POST http://localhost:8000/api/v1/upload \
   -H "x-api-key: change-me-in-production" \
   -F "file=@your_data.csv"
 
 # 2. Ask a question
-curl -X POST http://localhost:8000/chat \
+curl -X POST http://localhost:8000/api/v1/chat \
   -H "x-api-key: change-me-in-production" \
   -H "Content-Type: application/json" \
   -d '{"message": "what are total sales by region?"}'
 ```
 
+`/health` is unversioned (no `/api/v1` prefix) since load balancers and
+container orchestrators expect a stable health path.
+
 The response includes a `session_id` - pass it back on the next request
 to continue the same conversation with memory.
+
+```bash
+# List known sessions / inspect one
+curl http://localhost:8000/api/v1/chat/sessions -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/api/v1/chat/sessions/<session_id> -H "x-api-key: change-me-in-production"
+```
 
 ## Project structure
 
 ```
 app/
-├── main.py              FastAPI entrypoint
+├── main.py              FastAPI entrypoint - mounts /health and /api/v1
 ├── config.py             env var loading
 ├── llm/client.py         Ollama connection (swap models/providers here only)
 ├── agent/
@@ -72,10 +81,27 @@ app/
 │   └── memory.py          conversation memory via LangGraph checkpointer
 ├── tools/
 │   ├── pandas_tool.py      dataframe query tool
-│   └── sql_tool.py         SQL query tool (in-memory SQLite)
+│   ├── sql_tool.py         SQL query tool (in-memory SQLite)
+│   └── inventory_tool.py   inventory gap check by date + SLOC (calls external REST API)
+├── db/
+│   └── session.py          SQLAlchemy engine/session + init_db()
+├── models/
+│   └── chat_session.py     ChatSession entity (SQLAlchemy)
+├── services/
+│   └── chat_session_service.py   session create/touch/list/get
+├── schemas/
+│   ├── chat.py             ChatRequest / ChatResponse
+│   ├── chat_session.py     ChatSessionRead (entity -> API mapping)
+│   └── upload.py           UploadResponse
 └── api/
-    ├── routes.py           /upload, /chat, /health endpoints
-    └── auth.py             API key check
+    ├── health.py           unversioned GET /health
+    ├── deps.py             API key auth dependency
+    ├── exceptions.py       centralized error handler (no leaked tracebacks)
+    └── v1/
+        ├── router.py       aggregates endpoint routers under /api/v1
+        └── endpoints/
+            ├── upload.py    POST /api/v1/upload
+            └── chat.py      POST/GET /api/v1/chat, /api/v1/chat/sessions[/{id}]
 ```
 
 ## Build order this followed (recommended if extending)
@@ -91,11 +117,19 @@ app/
 - `run_pandas_query` uses a restricted `eval()`, not a real sandbox. Fine
   for a single trusted internal user; for multi-user production, move
   execution into a subprocess or container with resource limits.
-- `InMemorySaver` for conversation memory means history is lost on
-  restart and doesn't work across multiple app instances. Swap for a
-  Redis or Postgres checkpointer (`langgraph-checkpoint-redis` /
-  `langgraph-checkpoint-postgres`) if you scale beyond one process -
-  you already have Redis experience, so that's a natural upgrade path.
+- Conversation memory now persists to a SQLite file (`CHECKPOINT_DB_PATH`,
+  via `langgraph-checkpoint-sqlite`) instead of `InMemorySaver`, so it
+  survives restarts - but it's still one file on one box. Swap for
+  `langgraph-checkpoint-postgres` if you run multiple app instances
+  behind a load balancer.
+- `ChatSession` metadata (`app/models/chat_session.py`) also lives in
+  SQLite (`DATABASE_URL`) with tables created via `Base.metadata.create_all()`
+  at startup. Move to Alembic migrations once the schema needs versioned
+  changes rather than just new tables/columns.
+- `check_inventory_gap` (`app/tools/inventory_tool.py`) is wired against a
+  **placeholder** contract - path, auth header, and response field names
+  in that file, plus `INVENTORY_API_BASE_URL`/`INVENTORY_API_KEY` in
+  `.env.example`, need to be updated to match the real inventory API.
 - No RAG/vector store yet - add if the agent needs to search across many
   documents rather than just query one structured dataset at a time.
 - No LangSmith tracing wired in - useful once you're debugging why the

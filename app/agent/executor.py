@@ -11,6 +11,7 @@ from langchain.agents import create_agent
 from app.llm.client import get_chat_model
 from app.tools.pandas_tool import describe_dataset, run_pandas_query
 from app.tools.sql_tool import run_sql_query
+from app.tools.inventory_tool import check_inventory_gap
 
 SYSTEM_PROMPT = """You are a data analytics assistant for internal office use.
 
@@ -22,6 +23,11 @@ Prefer run_pandas_query for aggregations, filtering, and calculations.
 Use run_sql_query if the user explicitly asks for SQL or the question is
 naturally a join/group-by that reads more clearly as SQL.
 
+Use check_inventory_gap when the user asks about an inventory gap or
+stock variance for a specific storage location (SLOC) and date - this
+calls the external inventory system directly and does not need a
+dataset to be uploaded first.
+
 Keep tool calls minimal: describe once, then query directly. If a query
 errors, read the error, fix the column name or syntax, and retry once.
 If you still can't get it after one retry, explain what went wrong to
@@ -31,7 +37,7 @@ the user instead of retrying indefinitely.
 # Keep the toolset small and focused. Local models degrade in tool-call
 # reliability once you hand them many tools at once - three well-scoped
 # tools beats ten loosely-scoped ones.
-TOOLS = [describe_dataset, run_pandas_query, run_sql_query]
+TOOLS = [describe_dataset, run_pandas_query, run_sql_query, check_inventory_gap]
 
 
 def build_agent():

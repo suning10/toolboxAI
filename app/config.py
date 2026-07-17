@@ -27,3 +27,20 @@ MODEL_TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", "0"))
 API_KEY = os.getenv("API_KEY", "change-me-in-production")
 
 DATA_UPLOAD_DIR = os.getenv("DATA_UPLOAD_DIR", "data/uploads")
+
+# SQLite by default - stores application metadata (e.g. chat session
+# records, see app/models/chat_session.py). Point at Postgres
+# ("postgresql://...") if you scale beyond one instance.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
+
+# Separate SQLite file for LangGraph's own checkpoint storage (the full
+# conversation state). Kept apart from DATABASE_URL because LangGraph
+# manages this schema itself via SqliteSaver, not through our models.
+CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "data/checkpoints.sqlite")
+
+# External inventory system's REST API, used by
+# app/tools/inventory_tool.py to check stock gaps by date + SLOC.
+# PLACEHOLDER - point this at the real inventory service and update the
+# request/response contract in inventory_tool.py to match its API.
+INVENTORY_API_BASE_URL = os.getenv("INVENTORY_API_BASE_URL", "http://localhost:9000/api")
+INVENTORY_API_KEY = os.getenv("INVENTORY_API_KEY", "")
