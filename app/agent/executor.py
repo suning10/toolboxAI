@@ -7,21 +7,20 @@ with agent_scratchpad placeholders. create_agent() builds a LangGraph
 ReAct loop for you - you just hand it a model, tools, and a system
 prompt.
 """
+from datetime import datetime
 from langchain.agents import create_agent
 from app.llm.client import get_chat_model
 from app.tools.pandas_tool import describe_dataset, run_pandas_query
 from app.tools.sql_tool import run_sql_query
 from app.tools.inventory_tool import check_inventory_gap
 
-SYSTEM_PROMPT = """You are a data analytics assistant for internal office use.
 
-You help analyze spreadsheet/CSV data that has been uploaded. Always call
-describe_dataset first if you haven't already seen the dataset's columns
-in this conversation - never guess column names.
 
-Prefer run_pandas_query for aggregations, filtering, and calculations.
-Use run_sql_query if the user explicitly asks for SQL or the question is
-naturally a join/group-by that reads more clearly as SQL.
+
+SYSTEM_PROMPT = f"""You are a data analytics assistant for internal office use.
+
+Current date: {datetime.now().strftime('%Y-%m-%d')}
+Always use this date as your current date when relevant 
 
 Use check_inventory_gap when the user asks about an inventory gap or
 stock variance for a specific storage location (SLOC) and date - this

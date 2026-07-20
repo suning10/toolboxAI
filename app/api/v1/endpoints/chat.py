@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+
 from app.agent.memory import build_agent_with_memory, invoke_with_history
 from app.api.deps import verify_api_key
 from app.db.session import get_db
@@ -10,13 +11,12 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.chat_session import ChatSessionRead
 from app.services import chat_session_service
 
-router = APIRouter()
+router = APIRouter(prefix="/admin/ai", tags=["admin"])
 
 # Built once at import time, reused across requests - avoids reloading
 # the model connection on every call. Fine at your call volume; if you
 # scale up, consider a connection pool per worker instead.
 _agent = build_agent_with_memory()
-
 
 @router.post("/chat", response_model=ChatResponse, summary="Ask a question about the loaded dataset")
 def chat(req: ChatRequest, db: Session = Depends(get_db), _=Depends(verify_api_key)):
