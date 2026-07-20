@@ -7,26 +7,32 @@ with agent_scratchpad placeholders. create_agent() builds a LangGraph
 ReAct loop for you - you just hand it a model, tools, and a system
 prompt.
 """
+import datetime
+
 from langchain.agents import create_agent
+
+
 from app.llm.client import get_chat_model
 from app.tools.pandas_tool import describe_dataset, run_pandas_query
 from app.tools.sql_tool import run_sql_query
 from app.tools.inventory_tool import check_inventory_gap
+from app.tools.knowledge_tool import search_sops
 
-SYSTEM_PROMPT = """You are a data analytics assistant for internal office use.
+SYSTEM_PROMPT = f"""You are a data analytics assistant for internal office use.
 
-You help analyze spreadsheet/CSV data that has been uploaded. Always call
-describe_dataset first if you haven't already seen the dataset's columns
-in this conversation - never guess column names.
-
-Prefer run_pandas_query for aggregations, filtering, and calculations.
-Use run_sql_query if the user explicitly asks for SQL or the question is
-naturally a join/group-by that reads more clearly as SQL.
+Current Date: {datetime.datetime.today().strftime('%Y-%m-%d')}
 
 Use check_inventory_gap when the user asks about an inventory gap or
 stock variance for a specific storage location (SLOC) and date - this
 calls the external inventory system directly and does not need a
 dataset to be uploaded first.
+
+Use search_sops when the user asks how to do something in the office
+or what the procedure/policy is for something (e.g. badge requests,
+safety incidents, expense approvals) - it searches the SOP knowledge
+base and returns relevant excerpts. Answer from those excerpts and
+cite the source document title; if nothing relevant comes back, say so
+instead of guessing.
 
 Keep tool calls minimal: describe once, then query directly. If a query
 errors, read the error, fix the column name or syntax, and retry once.
@@ -37,7 +43,7 @@ the user instead of retrying indefinitely.
 # Keep the toolset small and focused. Local models degrade in tool-call
 # reliability once you hand them many tools at once - three well-scoped
 # tools beats ten loosely-scoped ones.
-TOOLS = [describe_dataset, run_pandas_query, run_sql_query, check_inventory_gap]
+TOOLS = [describe_dataset, run_pandas_query, run_sql_query, check_inventory_gap, search_sops]
 
 
 def build_agent():

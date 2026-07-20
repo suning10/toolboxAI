@@ -528,6 +528,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
+    { name = "sqlite-vec" },
     { name = "tabulate" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -552,6 +553,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "sqlalchemy", specifier = ">=2.0.51" },
+    { name = "sqlite-vec", specifier = ">=0.1.9" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]

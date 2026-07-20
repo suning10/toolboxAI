@@ -46,18 +46,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 # 1. Upload a dataset
-curl -X POST http://localhost:8000/api/v1/upload \
+curl -X POST http://localhost:8000/admin/upload \
   -H "x-api-key: change-me-in-production" \
   -F "file=@your_data.csv"
 
 # 2. Ask a question
-curl -X POST http://localhost:8000/api/v1/chat \
+curl -X POST http://localhost:8000/admin/chat \
   -H "x-api-key: change-me-in-production" \
   -H "Content-Type: application/json" \
   -d '{"message": "what are total sales by region?"}'
 ```
 
-`/health` is unversioned (no `/api/v1` prefix) since load balancers and
+`/health` is unversioned (no `/admin` prefix) since load balancers and
 container orchestrators expect a stable health path.
 
 The response includes a `session_id` - pass it back on the next request
@@ -65,24 +65,52 @@ to continue the same conversation with memory.
 
 ```bash
 # List known sessions / inspect one
-curl http://localhost:8000/api/v1/chat/sessions -H "x-api-key: change-me-in-production"
-curl http://localhost:8000/api/v1/chat/sessions/<session_id> -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/admin/chat/sessions -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/admin/chat/sessions/<session_id> -H "x-api-key: change-me-in-production"
 ```
+
+### SOP knowledge base (RAG)
+
+Ingest office SOPs (`.txt`/`.md`) so the agent can answer "how do I..."
+questions by searching them, instead of guessing:
+
+```bash
+# Pull an embedding model once, alongside your chat model
+ollama pull nomic-embed-text
+
+curl -X POST http://localhost:8000/admin/sops/upload \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@badge_request.md"
+```
+
+This chunks the doc, embeds each chunk (`EMBEDDING_MODEL`), and stores
+it in a `sqlite-vec` index (`SOP_VECTOR_DB_PATH`) - a one-time step per
+doc, not something that runs on every chat request. Re-uploading the
+same filename replaces its previous chunks. The agent's `search_sops`
+tool then embeds just the user's question at chat time and does a
+cosine-similarity search against that index.
 
 ## Project structure
 
 ```
 app/
-├── main.py              FastAPI entrypoint - mounts /health and /api/v1
+├── main.py              FastAPI entrypoint - mounts /health and /admin
 ├── config.py             env var loading
-├── llm/client.py         Ollama connection (swap models/providers here only)
+├── llm/
+│   ├── client.py           Ollama chat connection (swap models/providers here only)
+│   └── embeddings.py       Ollama embedding connection
 ├── agent/
 │   ├── executor.py        agent definition (create_agent + system prompt + tools)
 │   └── memory.py          conversation memory via LangGraph checkpointer
 ├── tools/
 │   ├── pandas_tool.py      dataframe query tool
 │   ├── sql_tool.py         SQL query tool (in-memory SQLite)
-│   └── inventory_tool.py   inventory gap check by date + SLOC (calls external REST API)
+│   ├── inventory_tool.py   inventory gap check by date + SLOC (calls external REST API)
+│   └── knowledge_tool.py   search_sops - runtime query side of the SOP knowledge base
+├── knowledge/
+│   ├── chunking.py         paragraph-aware text chunker
+│   ├── vector_store.py     sqlite-vec backed chunk/embedding store
+│   └── ingest.py           offline ingestion: chunk + embed + store an SOP doc
 ├── db/
 │   └── session.py          SQLAlchemy engine/session + init_db()
 ├── models/
@@ -92,16 +120,18 @@ app/
 ├── schemas/
 │   ├── chat.py             ChatRequest / ChatResponse
 │   ├── chat_session.py     ChatSessionRead (entity -> API mapping)
-│   └── upload.py           UploadResponse
+│   ├── upload.py           UploadResponse
+│   └── sop.py              SopIngestResponse
 └── api/
     ├── health.py           unversioned GET /health
     ├── deps.py             API key auth dependency
     ├── exceptions.py       centralized error handler (no leaked tracebacks)
     └── v1/
-        ├── router.py       aggregates endpoint routers under /api/v1
+        ├── router.py       aggregates endpoint routers under /admin
         └── endpoints/
-            ├── upload.py    POST /api/v1/upload
-            └── chat.py      POST/GET /api/v1/chat, /api/v1/chat/sessions[/{id}]
+            ├── upload.py    POST /admin/upload
+            ├── sops.py      POST /admin/sops/upload
+            └── chat.py      POST/GET /admin/chat, /admin/chat/sessions[/{id}]
 ```
 
 ## Build order this followed (recommended if extending)
@@ -130,8 +160,9 @@ app/
   **placeholder** contract - path, auth header, and response field names
   in that file, plus `INVENTORY_API_BASE_URL`/`INVENTORY_API_KEY` in
   `.env.example`, need to be updated to match the real inventory API.
-- No RAG/vector store yet - add if the agent needs to search across many
-  documents rather than just query one structured dataset at a time.
+- The SOP knowledge base (`app/knowledge/`) only supports `.txt`/`.md`
+  ingestion for now. Add a PDF/DOCX extractor to `ingest.py` if SOPs live
+  in those formats.
 - No LangSmith tracing wired in - useful once you're debugging why the
   agent picked a specific tool call; set `LANGCHAIN_TRACING_V2=true` and
   `LANGCHAIN_API_KEY` env vars to enable it with zero code changes.

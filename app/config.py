@@ -16,7 +16,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # Run `ollama show <model>` and check for "tools" under Capabilities
 # before assuming it works. Qwen2.5/Qwen3 (14B+) are currently the most
 # reliable open models for tool calling.
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.0:14b")
 
 # Set temperature low for analytics/tool-calling tasks - you want
 # deterministic tool selection, not creative variation.
@@ -44,3 +44,19 @@ CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "data/checkpoints.sqlite")
 # request/response contract in inventory_tool.py to match its API.
 INVENTORY_API_BASE_URL = os.getenv("INVENTORY_API_BASE_URL", "http://localhost:9000/api")
 INVENTORY_API_KEY = os.getenv("INVENTORY_API_KEY", "")
+
+# SOP knowledge base (RAG over office procedure docs) - see
+# app/knowledge/ and app/tools/knowledge_tool.py.
+# Must be an embedding model you've pulled: `ollama pull nomic-embed-text`.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
+
+SOP_DOCS_DIR = os.getenv("SOP_DOCS_DIR", "data/sops")
+# Separate SQLite file (sqlite-vec extension) holding chunk text +
+# embeddings for the SOP knowledge base - kept apart from DATABASE_URL
+# since it's queried via raw sqlite3 + the vec0 virtual table, not SQLAlchemy.
+SOP_VECTOR_DB_PATH = os.getenv("SOP_VECTOR_DB_PATH", "data/sop_vectors.sqlite")
+
+SOP_CHUNK_SIZE = int(os.getenv("SOP_CHUNK_SIZE", "800"))
+SOP_CHUNK_OVERLAP = int(os.getenv("SOP_CHUNK_OVERLAP", "150"))
+SOP_SEARCH_TOP_K = int(os.getenv("SOP_SEARCH_TOP_K", "4"))
