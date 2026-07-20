@@ -22,7 +22,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router)
 register_exception_handlers(app)
 
 # Run with: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
