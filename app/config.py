@@ -16,7 +16,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # Run `ollama show <model>` and check for "tools" under Capabilities
 # before assuming it works. Qwen2.5/Qwen3 (14B+) are currently the most
 # reliable open models for tool calling.
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:0.6b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:0.8b")
 
 # Set temperature low for analytics/tool-calling tasks - you want
 # deterministic tool selection, not creative variation.

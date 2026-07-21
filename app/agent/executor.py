@@ -29,9 +29,8 @@ calls the external inventory system directly and does not need a
 dataset to be uploaded first.
 
 Use search_sops when the user asks how to do something in the office
-or what the procedure/policy is for something (e.g. badge requests,
-safety incidents, expense approvals) - it searches the SOP knowledge
-base and returns relevant excerpts. Answer from those excerpts and
+or what the procedure is for operation e.g. "how to quick set up inventory 
+audit or how to do inventory adjustment. Answer from those excerpts and
 cite the source document title; if nothing relevant comes back, say so
 instead of guessing.
 
@@ -44,7 +43,7 @@ the user instead of retrying indefinitely.
 # Keep the toolset small and focused. Local models degrade in tool-call
 # reliability once you hand them many tools at once - three well-scoped
 # tools beats ten loosely-scoped ones.
-TOOLS = [describe_dataset, run_pandas_query, run_sql_query, check_inventory_gap, search_sops]
+TOOLS = [run_sql_query, check_inventory_gap, search_sops]
 
 
 def build_agent():

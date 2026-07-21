@@ -11,12 +11,12 @@ from app.knowledge import vector_store as vs
 from app.llm.embeddings import get_embeddings
 
 
+
+
 @tool
 def search_sops(query: str) -> str:
     """Search the office SOP (standard operating procedure) knowledge
-    base for text relevant to the user's question, e.g. "how do I
-    request a new badge" or "what's the process for reporting a safety
-    incident". Returns the most relevant SOP excerpts with their
+    base for text relevant to the user's question, e.g. "how to quick set up inventory audit or how to do inventory adjustment. Returns the most relevant SOP excerpts with their
     source document titles - read them and answer in your own words,
     citing the document title.
     """

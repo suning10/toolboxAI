@@ -10,7 +10,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.chat_session import ChatSessionMessages, ChatSessionRead
 from app.services import chat_session_service
 
-router = APIRouter()
+router = APIRouter(prefix="/ai")
 
 # Built once at import time, reused across requests - avoids reloading
 # the model connection on every call. Fine at your call volume; if you
@@ -18,8 +18,8 @@ router = APIRouter()
 _agent = build_agent_with_memory()
 
 
-@router.post("/chat", response_model=ChatResponse, summary="Ask a question about the loaded dataset")
-def chat(req: ChatRequest, db: Session = Depends(get_db), _=Depends(verify_api_key)):
+@router.post("/chat", response_model=ChatResponse, summary="Ask a question about SCR Report")
+def chat(req: ChatRequest, db: Session = Depends(get_db)): #, _=Depends(verify_api_key)):
     session_id = req.session_id or str(uuid.uuid4())
     answer = invoke_with_history(_agent, req.message, session_id)
     chat_session_service.touch_session(db, session_id, first_message=req.message)

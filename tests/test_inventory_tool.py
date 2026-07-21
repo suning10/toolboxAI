@@ -54,3 +54,7 @@ def test_check_inventory_gap_api_error(monkeypatch):
     monkeypatch.setattr(inventory_tool.httpx, "get", fake_get)
     result = inventory_tool.check_inventory_gap.invoke({"date": "2026-07-16", "sloc": "9999"})
     assert "Inventory API error" in result
+
+def test_check_inventory_gap_missing_sloc():
+    result = inventory_tool.check_inventory_gap.invoke({"date": "2026-07-16", "sloc": "WC1E"})
+    assert "Missing sloc" in result
