@@ -11,15 +11,16 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.chat_session import ChatSessionRead
 from app.services import chat_session_service
 
-router = APIRouter(prefix="/admin/ai", tags=["admin"])
+router = APIRouter(prefix="/ai", tags=["chat"])
 
 # Built once at import time, reused across requests - avoids reloading
 # the model connection on every call. Fine at your call volume; if you
 # scale up, consider a connection pool per worker instead.
 _agent = build_agent_with_memory()
 
-@router.post("/chat", response_model=ChatResponse, summary="Ask a question about the loaded dataset")
-def chat(req: ChatRequest, db: Session = Depends(get_db), _=Depends(verify_api_key)):
+@router.post("/chat", response_model=ChatResponse, summary="")
+#def chat(req: ChatRequest, db: Session = Depends(get_db), _=Depends(verify_api_key)):
+def chat(req: ChatRequest, db: Session = Depends(get_db)):
     session_id = req.session_id or str(uuid.uuid4())
     answer = invoke_with_history(_agent, req.message, session_id)
     chat_session_service.touch_session(db, session_id)
