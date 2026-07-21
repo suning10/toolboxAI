@@ -3,15 +3,28 @@ from sqlalchemy.orm import Session
 
 from app.models.chat_session import ChatSession
 
+TITLE_MAX_LENGTH = 60
 
-def touch_session(db: Session, session_id: str) -> ChatSession:
+
+def _title_from_message(message: str) -> str:
+    message = " ".join(message.split())
+    if len(message) <= TITLE_MAX_LENGTH:
+        return message
+    return message[:TITLE_MAX_LENGTH].rstrip() + "..."
+
+
+def touch_session(db: Session, session_id: str, first_message: str | None = None) -> ChatSession:
     """Create the session row if it's new, otherwise bump its message
     count. Called once per /chat request - `updated_at` refreshes via
     the column's onupdate=func.now() whenever this row changes.
+
+    `title` is set once, from the first message of the session (like
+    ChatGPT's sidebar) - it's never overwritten on later turns.
     """
     session = db.get(ChatSession, session_id)
     if session is None:
-        session = ChatSession(id=session_id, message_count=1)
+        title = _title_from_message(first_message) if first_message else None
+        session = ChatSession(id=session_id, title=title, message_count=1)
         db.add(session)
     else:
         session.message_count += 1

@@ -3,11 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.agent.memory import build_agent_with_memory, invoke_with_history
+from app.agent.memory import build_agent_with_memory, get_message_history, invoke_with_history
 from app.api.deps import verify_api_key
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.schemas.chat_session import ChatSessionRead
+from app.schemas.chat_session import ChatSessionMessages, ChatSessionRead
 from app.services import chat_session_service
 
 router = APIRouter()
@@ -22,7 +22,7 @@ _agent = build_agent_with_memory()
 def chat(req: ChatRequest, db: Session = Depends(get_db), _=Depends(verify_api_key)):
     session_id = req.session_id or str(uuid.uuid4())
     answer = invoke_with_history(_agent, req.message, session_id)
-    chat_session_service.touch_session(db, session_id)
+    chat_session_service.touch_session(db, session_id, first_message=req.message)
     return ChatResponse(response=answer, session_id=session_id)
 
 
@@ -45,3 +45,17 @@ def get_chat_session(session_id: str, db: Session = Depends(get_db), _=Depends(v
     if session is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
     return session
+
+
+@router.get(
+    "/chat/sessions/{session_id}/messages",
+    response_model=ChatSessionMessages,
+    summary="Get the full message history for one chat session",
+)
+def get_chat_session_messages(
+    session_id: str, db: Session = Depends(get_db), _=Depends(verify_api_key)
+):
+    if chat_session_service.get_session(db, session_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    messages = get_message_history(_agent, session_id)
+    return ChatSessionMessages(session_id=session_id, messages=messages)
