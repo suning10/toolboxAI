@@ -53,3 +53,29 @@ def invoke_with_history(agent, message: str, session_id: str):
         config=config,
     )
     return result["messages"][-1].content
+
+
+# Maps LangChain's internal message.type to the role names a frontend
+# chat UI expects. Tool-call messages are deliberately excluded - a
+# ChatGPT-style history view only shows the user/assistant turns.
+_ROLE_BY_TYPE = {"human": "user", "ai": "assistant"}
+
+
+def get_message_history(agent, session_id: str) -> list[dict]:
+    """
+    Returns the full conversation for session_id as a flat list of
+    {"role": "user"|"assistant", "content": str} dicts, oldest first -
+    read from the checkpointer's stored graph state, not re-run through
+    the model. Empty list if the session doesn't exist or has no
+    checkpoint yet.
+    """
+    config = {"configurable": {"thread_id": session_id}}
+    state = agent.get_state(config)
+    messages = state.values.get("messages", []) if state.values else []
+
+    history = []
+    for msg in messages:
+        role = _ROLE_BY_TYPE.get(msg.type)
+        if role and msg.content:
+            history.append({"role": role, "content": msg.content})
+    return history
