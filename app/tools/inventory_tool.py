@@ -12,13 +12,15 @@ have its docs:
   Header: Authorization: Bearer <INVENTORY_API_KEY>
   Response: {"sloc": "...", "date": "...", "gap_qty": <number>, "unit": "..."}
 """
+import logging
 from datetime import date as _date, datetime
 
 import httpx
 from langchain.tools import tool
-from openpyxl.worksheet.print_settings import PRINT_AREA_RE
 
 from app.config import INVENTORY_API_BASE_URL, INVENTORY_API_KEY
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -50,12 +52,13 @@ def check_inventory_gap(date: str, sloc: str) -> str:
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
+        logger.warning("Inventory API returned %s: %s", e.response.status_code, e.response.text)
         return f"Inventory API error ({e.response.status_code}): {e.response.text}"
     except httpx.HTTPError as e:
+        logger.warning("Could not reach inventory API at %s: %s", INVENTORY_API_BASE_URL, e)
         return f"Could not reach inventory API: {e}"
 
-    print(INVENTORY_API_KEY)
-    print(INVENTORY_API_BASE_URL)
+    logger.debug("Inventory API request to %s succeeded", INVENTORY_API_BASE_URL)
     data = response.json()
     res = ""
     try:

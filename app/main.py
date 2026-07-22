@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
 
+from app.logging_config import configure_logging
+
+configure_logging()  # before any other app.* import, so nothing logs unconfigured
+
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 

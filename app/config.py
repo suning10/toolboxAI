@@ -60,3 +60,9 @@ SOP_VECTOR_DB_PATH = os.getenv("SOP_VECTOR_DB_PATH", "data/sop_vectors.sqlite")
 SOP_CHUNK_SIZE = int(os.getenv("SOP_CHUNK_SIZE", "800"))
 SOP_CHUNK_OVERLAP = int(os.getenv("SOP_CHUNK_OVERLAP", "150"))
 SOP_SEARCH_TOP_K = int(os.getenv("SOP_SEARCH_TOP_K", "4"))
+
+# Root log level for the app's own loggers (app.*) - see
+# app/logging_config.py. DEBUG is noisy (logs tool inputs/outputs);
+# INFO is the usual default; use WARNING in production if you only
+# want problems surfaced.
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
