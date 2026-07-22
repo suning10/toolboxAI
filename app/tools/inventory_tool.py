@@ -13,7 +13,7 @@ have its docs:
   Response: {"sloc": "...", "date": "...", "gap_qty": <number>, "unit": "..."}
 """
 import logging
-from datetime import date as _date, datetime
+from datetime import date as _date, datetime, date, timedelta
 
 import httpx
 from langchain.tools import tool
@@ -24,28 +24,30 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def check_inventory_gap(date: str, sloc: str) -> str:
+def check_inventory_gap(day: str, sloc= "") -> str:
     """Check the inventory gap (expected vs. actual stock variance) for
-    a specific storage location on a specific date. User May also called it SCR(stock comparison report)
-    the data returned from API call may have all slocs and total, pick the one user asked.
+    a specific storage location on a specific date(optional). User May also called it SCR(stock comparison report)
+    the data returned from API call may have all sloc and total, pick the one user asked.
+    if sloc is empty, return total
 
     Args:
-        date: ISO date string, e.g. "2026-07-16".
-        sloc: Storage location code, e.g. "1001".
+        day: ISO date string, e.g. "2026-07-18".
+        sloc: Storage location code, it can be optional
 
     """
+
     try:
-        parsed_date = _date.fromisoformat(date)
-        daydiff = parsed_date - _date.fromisoformat(datetime.now().strftime('%Y-%m-%d'))
+        parsed_date = _date.fromisoformat(day)
+        daydiff:timedelta = date.today() - parsed_date
     except ValueError:
-        return f"Invalid date '{date}'. Use ISO format, e.g. 2026-07-16."
+        return f"Invalid date '{day}'. Use ISO format, e.g. 2026-07-16."
 
-    if not sloc:
-        return "Missing sloc: provide a storage location code."
-
+    # if not sloc:
+    #     return "Missing sloc: provide a storage location code."
+    # logger.info("Inventory API request to %s succeeded", INVENTORY_API_BASE_URL)
     try:
         response = httpx.get(
-            f"{INVENTORY_API_BASE_URL}?date={daydiff}",
+            f"{INVENTORY_API_BASE_URL}?date={daydiff.days}",
             # params={"date": parsed_date.isoformat(), "sloc": sloc},
             headers={"Token": f"{INVENTORY_API_KEY}"},
             timeout=15.0,
@@ -58,12 +60,15 @@ def check_inventory_gap(date: str, sloc: str) -> str:
         logger.warning("Could not reach inventory API at %s: %s", INVENTORY_API_BASE_URL, e)
         return f"Could not reach inventory API: {e}"
 
-    logger.debug("Inventory API request to %s succeeded", INVENTORY_API_BASE_URL)
+    # logger.debug("Inventory API request to %s succeeded", INVENTORY_API_BASE_URL)
     data = response.json()
+    logger.debug("Inventory API response: %s", data)
     res = ""
     try:
+        if data["code"] != 1:
+            return "no data can be found"
         for record in data.get("data"):
-            res += f"{record['sloc']}'s gap is {record['absoluteGap']}. "
+            res += f"{day}'s {record['sloc']}'s gap is {record['absoluteGap']}. "
     # gap = data.get("data")[-1].get("absoluteGap")
     except KeyError:
         return "Inventory API error: No data"

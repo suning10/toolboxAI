@@ -24,7 +24,7 @@ answer questions over uploaded CSV/Excel data using pandas and SQL tools.
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
-cp .env.example .env      # edit OLLAMA_BASE_URL / OLLAMA_MODEL / API_KEY as needed
+cp .env .env      # edit OLLAMA_BASE_URL / OLLAMA_MODEL / API_KEY as needed
 ```
 
 ## Run tests first (no model required)

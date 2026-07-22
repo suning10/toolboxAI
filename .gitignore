@@ -13,7 +13,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# Env vars (secrets/local config) - see .env.example for the template
+# Env vars (secrets/local config) - see .env for the template
 .env
 
 # Runtime data - uploaded datasets, app DB, LangGraph checkpoint DB

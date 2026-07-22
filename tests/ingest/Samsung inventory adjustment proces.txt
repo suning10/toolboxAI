@@ -1,0 +1,18 @@
+Samsung inventory adjustment process
+
+Due to Operations picking during cycle counting the following will apply to ensure accurate inventory counts and adjustments are being completed.
+
+•	IC team members will have previous day counts assigned to them by IC Supervisor daily
+•	IC team members will go to locations to count by using RF gun and enter count
+o	If there is a variance the location will be put on hold and all locations will be counted for that item.  Counter will use a laptop to drop locations in excel and update system qty for each location when they arrive to ensure system qty has not changed as picking is occurring 
+o	Counts will then be processed into the RF gun at the time count has completed per location
+
+	Variances
+•	If the is a positive adjustment after all locations have been counted the IC Specialist will enter the overage quantity in the RF gun and assign the 2nd count to another IC Specialist to recount and clear the suspended plates.	
+•	Overage product will then be moved onto a new LP into the OVRCAGE where the material will be placed inside overage cage until approved to move back into pick front from customer
+•	If there is a negative adjustment the same process will occur, but the missing product will be moved into the VECO-30 location and suspended plates will be deleted so the product will not be adjusted out of the system
+
+•	IRR reports will be filled out by Supervisor for any of the above adjustments and sent to customer same day after researching
+•	Any variances will have to be entered manually to the daily Cycle Report that goes to the customer at end of day since the system will not populate these transactions on the report
+]
+	Random audits will be completed by Supervisor to ensure any adjustments made are accurate to confirm the inventory integrity

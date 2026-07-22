@@ -1,10 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, logger
 from sqlalchemy.orm import Session
 
 from app.agent.memory import build_agent_with_memory, get_message_history, invoke_with_history
 from app.api.deps import verify_api_key
+from app.config import INVENTORY_API_BASE_URL
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.chat_session import ChatSessionMessages, ChatSessionRead
