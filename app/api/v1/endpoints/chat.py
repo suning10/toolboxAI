@@ -31,7 +31,7 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)): #, _=Depends(verify_a
     response_model=list[ChatSessionRead],
     summary="List known chat sessions",
 )
-def list_chat_sessions(db: Session = Depends(get_db), _=Depends(verify_api_key)):
+def list_chat_sessions(db: Session = Depends(get_db)): # , _=Depends(verify_api_key)):
     return chat_session_service.list_sessions(db)
 
 
@@ -40,7 +40,7 @@ def list_chat_sessions(db: Session = Depends(get_db), _=Depends(verify_api_key))
     response_model=ChatSessionRead,
     summary="Get one chat session's metadata",
 )
-def get_chat_session(session_id: str, db: Session = Depends(get_db), _=Depends(verify_api_key)):
+def get_chat_session(session_id: str, db: Session = Depends(get_db)):#, _=Depends(verify_api_key)):
     session = chat_session_service.get_session(db, session_id)
     if session is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
@@ -53,7 +53,7 @@ def get_chat_session(session_id: str, db: Session = Depends(get_db), _=Depends(v
     summary="Get the full message history for one chat session",
 )
 def get_chat_session_messages(
-    session_id: str, db: Session = Depends(get_db), _=Depends(verify_api_key)
+    session_id: str, db: Session = Depends(get_db) #, _=Depends(verify_api_key)
 ):
     if chat_session_service.get_session(db, session_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")

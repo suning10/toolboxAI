@@ -12,7 +12,7 @@ from app.knowledge.chunking import chunk_text
 from app.llm.embeddings import get_embeddings
 from app.tools import knowledge_tool
 
-DIM = 4
+DIM = 768
 
 
 class FakeEmbeddings:
@@ -90,7 +90,7 @@ def test_reingest_replaces_previous_chunks(tmp_path):
     assert "old process" not in result
 
 def test_ingest_and_search_sops():
-    tmp_path = r"C:\Users\l.qin3\Downloads\ingest\Samsung Ecom Inventory Process and Procecess and procedures quick step guide.txt"
+    tmp_path = "tests/ingest/scr.md"
     # badge_file = tmp_path / "badge_request.md"
     # badge_file.write_text("How to request a badge: submit a ticket to Facilities.")
     # fire_file = tmp_path / "fire_safety.md"
@@ -100,5 +100,5 @@ def test_ingest_and_search_sops():
     ingest.ingest_sop_file(str(tmp_path), embeddings)
     # ingest.ingest_sop_file(str(fire_file), embeddings=FakeEmbeddings())
 
-    result = knowledge_tool.search_sops.invoke({"query": "how to do inventory audit"})
+    result = knowledge_tool.search_sops.invoke({"query": "how to run scr"})
     print(result)
