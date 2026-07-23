@@ -16,7 +16,7 @@ import sqlite3
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessageChunk
+from langchain_core.messages import AIMessageChunk, ToolMessageChunk
 from app.config import CHECKPOINT_DB_PATH
 from app.llm.client import get_chat_model
 from app.agent.executor import SYSTEM_PROMPT, TOOLS
@@ -71,12 +71,12 @@ def stream_with_history(agent, message: str, session_id: str):
     for chunk, metadata in agent.stream(
         {"messages": [{"role": "user", "content": message}]},
         config=config,
-        stream_mode="messages",
+        stream_mode=["messages","updates"],
     ):
         if (
             isinstance(chunk, AIMessageChunk)
             and metadata.get("langgraph_node") == "model"
-            and not chunk.tool_call_chunks
+            # and not chunk.tool_call_chunks
             and chunk.content
         ):
             yield chunk.content
