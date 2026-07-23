@@ -1,0 +1,11 @@
+
+
+default None, so they're naturally filtered out for free).                                                                                                                      ↑
+   - Sync def FastAPI routes already run in a thread pool (confirmed via fastapi/routing.py source), and StreamingResponse explicitly supports being given a sync generator (wraps it
+   in iterate_in_threadpool automatically, per starlette/responses.py). So this can be added as a sync def route, matching the project's existing all-sync style — no async
+   def/.astream() needed.
+   - sse-starlette is not installed and isn't needed — SSE framing (event: ...\ndata: ...\n\n) is simple enough to hand-write with fastapi.responses.StreamingResponse, avoiding a
+   new dependency.
+   - Empirically verified (via a scratch FastAPI+TestClient check during planning) that a Depends(get_db) (yield-based) SQLAlchemy session dependency stays open for the entire
+   duration of a StreamingResponse generator's execution — cleanup only runs after the generator is fully exhausted. So it's safe to call chat_session_service.touch_session(db, ...)
+   from inside the streaming generator itself, after accumulating the full answer.                                                                                                                           ↓

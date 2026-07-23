@@ -65,9 +65,50 @@ to continue the same conversation with memory.
 
 ```bash
 # List known sessions / inspect one
-curl http://localhost:8000/admin/chat/sessions -H "x-api-key: change-me-in-production"
-curl http://localhost:8000/admin/chat/sessions/<session_id> -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/admin/ai/chat/sessions -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/admin/ai/chat/sessions/<session_id> -H "x-api-key: change-me-in-production"
+curl http://localhost:8000/admin/ai/chat/sessions/<session_id>/messages -H "x-api-key: change-me-in-production"
 ```
+
+### Streaming (SSE)
+
+`POST /admin/ai/chat/stream` streams the answer token-by-token via
+Server-Sent Events instead of waiting for the full response - built
+for a reactive client (e.g. Spring's `WebClient`) that wants to render
+tokens as they arrive:
+
+```bash
+curl -N -X POST http://localhost:8000/admin/ai/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "what are total sales by region?"}'
+```
+
+Event stream shape (same `ChatRequest` body as `/chat`; `session_id` is
+optional and generated if omitted, same as the non-streaming endpoint):
+
+```
+event: session
+data: {"session_id": "..."}
+
+event: token
+data: {"content": "Hel"}
+
+event: token
+data: {"content": "lo"}
+
+...
+
+event: done
+data: {"response": "Hello ..."}
+```
+
+If the model call fails partway through, an `error` event (`data:
+{"detail": "..."}`) is sent instead of `done` and the stream ends -
+the HTTP status is already `200` by the time any tokens are sent, so
+errors can't be surfaced as an HTTP error status and are signaled
+in-band instead. The session's message count/title is still recorded
+via `chat_session_service.touch_session` even if the stream errors
+partway through.
 
 ### SOP knowledge base (RAG)
 
@@ -101,7 +142,9 @@ app/
 │   └── embeddings.py       Ollama embedding connection
 ├── agent/
 │   ├── executor.py        agent definition (create_agent + system prompt + tools)
-│   └── memory.py          conversation memory via LangGraph checkpointer
+│   └── memory.py          conversation memory via LangGraph checkpointer;
+│                            invoke_with_history (blocking) and
+│                            stream_with_history (token-by-token, for SSE)
 ├── tools/
 │   ├── pandas_tool.py      dataframe query tool
 │   ├── sql_tool.py         SQL query tool (in-memory SQLite)

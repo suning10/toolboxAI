@@ -16,6 +16,7 @@ import sqlite3
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.agents import create_agent
+from langchain_core.messages import AIMessageChunk
 from app.config import CHECKPOINT_DB_PATH
 from app.llm.client import get_chat_model
 from app.agent.executor import SYSTEM_PROMPT, TOOLS
@@ -51,6 +52,34 @@ def invoke_with_history(agent, message: str, session_id: str):
         config=config,
     )
     return result["messages"][-1].content
+
+
+def stream_with_history(agent, message: str, session_id: str):
+    """
+    Same contract as invoke_with_history, but yields the final answer's
+    content token-by-token instead of returning it all at once.
+
+    stream_mode="messages" yields (chunk, metadata) pairs for every LLM
+    call inside the graph, not just the final answer - the filter below
+    excludes: in-progress tool-call chunks (empty content, non-empty
+    tool_call_chunks), the tool's own ToolMessage result (not an
+    AIMessageChunk at all), and - for reasoning/"thinking" models -
+    the thinking tokens, which arrive as AIMessageChunk(content='')
+    unless ChatOllama's `reasoning` field is explicitly turned on.
+    """
+    config = {"configurable": {"thread_id": session_id}}
+    for chunk, metadata in agent.stream(
+        {"messages": [{"role": "user", "content": message}]},
+        config=config,
+        stream_mode="messages",
+    ):
+        if (
+            isinstance(chunk, AIMessageChunk)
+            and metadata.get("langgraph_node") == "model"
+            and not chunk.tool_call_chunks
+            and chunk.content
+        ):
+            yield chunk.content
 
 
 # Maps LangChain's internal message.type to the role names a frontend
