@@ -6,6 +6,11 @@ class ChatRequest(BaseModel):
     session_id: str | None = Field(
         None, description="Existing session to continue; a new one is created if omitted"
     )
+    include_reasoning: bool = Field(
+        False,
+        description="Streaming only: also emit the model's reasoning/thinking as "
+        "'reasoning' SSE events. Ignored by the non-streaming /chat endpoint.",
+    )
 
 
 class ChatResponse(BaseModel):

@@ -17,5 +17,12 @@ def get_chat_model() -> ChatOllama:
         model=OLLAMA_MODEL,
         base_url=OLLAMA_BASE_URL,
         temperature=MODEL_TEMPERATURE,
-
+        # Cleanly separates a "thinking" model's reasoning into
+        # additional_kwargs["reasoning_content"] instead of leaving it
+        # mixed into the main response content. Only affects models
+        # that support reasoning (https://ollama.com/search?c=thinking)
+        # - ignored otherwise. Whether reasoning is actually *shown* to
+        # a caller is a per-request choice (see stream_agent_events'
+        # include_reasoning param), not controlled here.
+        reasoning=True,
     )

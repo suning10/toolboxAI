@@ -83,12 +83,22 @@ curl -N -X POST http://localhost:8000/admin/ai/chat/stream \
   -d '{"message": "what are total sales by region?"}'
 ```
 
-Event stream shape (same `ChatRequest` body as `/chat`; `session_id` is
-optional and generated if omitted, same as the non-streaming endpoint):
+Event stream shape (same `ChatRequest` body as `/chat`, plus an optional
+`include_reasoning` flag; `session_id` is optional and generated if
+omitted, same as the non-streaming endpoint):
 
 ```
 event: session
 data: {"session_id": "..."}
+
+event: reasoning              (only sent if include_reasoning: true in the request)
+data: {"content": "Let me check..."}
+
+event: tool_call              (sent once per tool call, as soon as the agent decides to call it)
+data: {"tool": "check_inventory_gap"}
+
+event: tool_result            (sent once that tool finishes, with its raw output)
+data: {"tool": "check_inventory_gap", "content": "..."}
 
 event: token
 data: {"content": "Hel"}
@@ -102,13 +112,23 @@ event: done
 data: {"response": "Hello ..."}
 ```
 
-If the model call fails partway through, an `error` event (`data:
-{"detail": "..."}`) is sent instead of `done` and the stream ends -
-the HTTP status is already `200` by the time any tokens are sent, so
-errors can't be surfaced as an HTTP error status and are signaled
-in-band instead. The session's message count/title is still recorded
-via `chat_session_service.touch_session` even if the stream errors
-partway through.
+- `reasoning` events only appear if the request body sets
+  `"include_reasoning": true` **and** the configured model actually
+  supports reasoning/thinking (e.g. `qwen3.5:0.8b`) - see `reasoning=True`
+  on `ChatOllama` in `app/llm/client.py`, which separates a thinking
+  model's reasoning into its own field instead of mixing it into the
+  final answer. Omit the flag (or leave it `false`, the default) to get
+  the old behavior exactly - no reasoning events, nothing else changes.
+- `tool_call`/`tool_result` events let the client show something like
+  *"Checking inventory..."* while a tool runs, instead of the UI going
+  quiet until the whole answer is ready.
+- If the model call fails partway through, an `error` event (`data:
+  {"detail": "..."}`) is sent instead of `done` and the stream ends -
+  the HTTP status is already `200` by the time any tokens are sent, so
+  errors can't be surfaced as an HTTP error status and are signaled
+  in-band instead. The session's message count/title is still recorded
+  via `chat_session_service.touch_session` even if the stream errors
+  partway through.
 
 ### SOP knowledge base (RAG)
 
@@ -143,8 +163,11 @@ app/
 ├── agent/
 │   ├── executor.py        agent definition (create_agent + system prompt + tools)
 │   └── memory.py          conversation memory via LangGraph checkpointer;
-│                            invoke_with_history (blocking) and
-│                            stream_with_history (token-by-token, for SSE)
+│                            invoke_with_history (blocking full answer),
+│                            stream_agent_events (tool_call/tool_result/
+│                            reasoning/answer events, for SSE), and
+│                            stream_with_history (answer text only,
+│                            thin wrapper over stream_agent_events)
 ├── tools/
 │   ├── pandas_tool.py      dataframe query tool
 │   ├── sql_tool.py         SQL query tool (in-memory SQLite)

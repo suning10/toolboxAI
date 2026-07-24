@@ -10,7 +10,7 @@ from app.agent.memory import (
     build_agent_with_memory,
     get_message_history,
     invoke_with_history,
-    stream_with_history,
+    stream_agent_events,
 )
 from app.api.deps import verify_api_key
 from app.config import INVENTORY_API_BASE_URL
@@ -40,25 +40,44 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)): #, _=Depends(verify_a
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
+# Maps stream_agent_events' event "type" to the SSE event: name sent to
+# the client - kept as "token" (not "answer") for the final-answer text
+# to match the existing wire contract from before tool-call/reasoning
+# events were added.
+_SSE_EVENT_NAME = {
+    "answer": "token",
+    "tool_call": "tool_call",
+    "tool_result": "tool_result",
+    "reasoning": "reasoning",
+}
 
-@router.post("/chat/stream", summary="Ask a question, streamed token-by-token via SSE")
+
+@router.post(
+    "/chat/stream",
+    summary="Ask a question, streamed token-by-token via SSE - "
+    "also surfaces tool_call/tool_result events, and reasoning if include_reasoning=True",
+)
 def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
     session_id = req.session_id or str(uuid.uuid4())
 
     def gen():
         yield _sse("session", {"session_id": session_id})
-        chunks: list[str] = []
+        answer_chunks: list[str] = []
         try:
-            for token in stream_with_history(_agent, req.message, session_id):
-                chunks.append(token)
-                yield _sse("token", {"content": token})
+            for event in stream_agent_events(
+                _agent, req.message, session_id, include_reasoning=req.include_reasoning
+            ):
+                event_type = event.pop("type")
+                if event_type == "answer":
+                    answer_chunks.append(event["content"])
+                yield _sse(_SSE_EVENT_NAME[event_type], event)
         except Exception as e:
             logger.exception("Streaming chat failed for session %s", session_id)
             yield _sse("error", {"detail": str(e)})
             return
         finally:
             chat_session_service.touch_session(db, session_id, first_message=req.message)
-        yield _sse("done", {"response": "".join(chunks)})
+        yield _sse("done", {"response": "".join(answer_chunks)})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 

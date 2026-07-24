@@ -16,7 +16,7 @@ import sqlite3
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessageChunk, ToolMessageChunk
+from langchain_core.messages import AIMessageChunk, ToolMessage
 from app.config import CHECKPOINT_DB_PATH
 from app.llm.client import get_chat_model
 from app.agent.executor import SYSTEM_PROMPT, TOOLS
@@ -54,32 +54,70 @@ def invoke_with_history(agent, message: str, session_id: str):
     return result["messages"][-1].content
 
 
-def stream_with_history(agent, message: str, session_id: str):
+def stream_agent_events(agent, message: str, session_id: str, include_reasoning: bool = False):
     """
-    Same contract as invoke_with_history, but yields the final answer's
-    content token-by-token instead of returning it all at once.
+    Rich event stream for a single chat turn - yields dicts describing
+    everything the agent does, not just the final answer text:
+
+      {"type": "tool_call", "tool": "<name>"}                 - agent started calling a tool
+      {"type": "tool_result", "tool": "<name>", "content": str} - that tool's result
+      {"type": "reasoning", "content": str}                    - thinking/reasoning tokens
+                                                                    (only if include_reasoning=True)
+      {"type": "answer", "content": str}                       - final answer tokens
 
     stream_mode="messages" yields (chunk, metadata) pairs for every LLM
-    call inside the graph, not just the final answer - the filter below
-    excludes: in-progress tool-call chunks (empty content, non-empty
-    tool_call_chunks), the tool's own ToolMessage result (not an
-    AIMessageChunk at all), and - for reasoning/"thinking" models -
-    the thinking tokens, which arrive as AIMessageChunk(content='')
-    unless ChatOllama's `reasoning` field is explicitly turned on.
+    call inside the graph, not just the final answer. Tool calls stream
+    in as partial tool_call_chunks (accumulating name/args across
+    several chunks) - each is announced once, the first time its name
+    appears, keyed by id (falling back to index if a provider omits
+    id). The tool's result itself arrives as one complete ToolMessage,
+    not a stream of chunks.
+
+    Reasoning tokens only show up in `additional_kwargs["reasoning_content"]`
+    if the underlying ChatOllama call was made with reasoning=True (see
+    app/llm/client.py) - with the default reasoning=None, "thinking"
+    models still think, but the tokens aren't separated out and are
+    silently skipped here instead (same as before this option existed).
     """
     config = {"configurable": {"thread_id": session_id}}
+    announced_tool_calls: set = set()
+
     for chunk, metadata in agent.stream(
         {"messages": [{"role": "user", "content": message}]},
         config=config,
-        stream_mode=["messages","updates"],
+        stream_mode="messages",
     ):
-        if (
-            isinstance(chunk, AIMessageChunk)
-            and metadata.get("langgraph_node") == "model"
-            # and not chunk.tool_call_chunks
-            and chunk.content
-        ):
-            yield chunk.content
+        if isinstance(chunk, ToolMessage) and metadata.get("langgraph_node") == "tools":
+            yield {"type": "tool_result", "tool": chunk.name, "content": chunk.content}
+            continue
+
+        if not isinstance(chunk, AIMessageChunk) or metadata.get("langgraph_node") != "model":
+            continue
+
+        for tool_call_chunk in chunk.tool_call_chunks:
+            call_key = tool_call_chunk.get("id") or tool_call_chunk.get("index")
+            name = tool_call_chunk.get("name")
+            if name and call_key not in announced_tool_calls:
+                announced_tool_calls.add(call_key)
+                yield {"type": "tool_call", "tool": name}
+
+        reasoning_text = chunk.additional_kwargs.get("reasoning_content")
+        if include_reasoning and reasoning_text:
+            yield {"type": "reasoning", "content": reasoning_text}
+        elif not chunk.tool_call_chunks and chunk.content:
+            yield {"type": "answer", "content": chunk.content}
+
+
+def stream_with_history(agent, message: str, session_id: str):
+    """
+    Same contract as invoke_with_history, but yields the final answer's
+    content token-by-token instead of returning it all at once. Thin
+    wrapper over stream_agent_events for callers that only want plain
+    answer text - see stream_agent_events for tool-call/reasoning events.
+    """
+    for event in stream_agent_events(agent, message, session_id):
+        if event["type"] == "answer":
+            yield event["content"]
 
 
 # Maps LangChain's internal message.type to the role names a frontend
