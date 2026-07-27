@@ -29,27 +29,7 @@ router = APIRouter(prefix="/ai")
 _agent = build_agent_with_memory()
 
 
-@router.post("/chat", response_model=ChatResponse, summary="Ask a question about SCR Report")
-def chat(req: ChatRequest, db: Session = Depends(get_db)): #, _=Depends(verify_api_key)):
-    session_id = req.session_id or str(uuid.uuid4())
-    answer = invoke_with_history(_agent, req.message, session_id)
-    chat_session_service.touch_session(db, session_id, first_message=req.message)
-    return ChatResponse(response=answer, session_id=session_id)
 
-
-def _sse(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
-
-# Maps stream_agent_events' event "type" to the SSE event: name sent to
-# the client - kept as "token" (not "answer") for the final-answer text
-# to match the existing wire contract from before tool-call/reasoning
-# events were added.
-_SSE_EVENT_NAME = {
-    "answer": "token",
-    "tool_call": "tool_call",
-    "tool_result": "tool_result",
-    "reasoning": "reasoning",
-}
 
 
 @router.post(
@@ -81,6 +61,27 @@ def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
+@router.post("/chat", response_model=ChatResponse, summary="Ask a question about SCR Report")
+def chat(req: ChatRequest, db: Session = Depends(get_db)): #, _=Depends(verify_api_key)):
+    session_id = req.session_id or str(uuid.uuid4())
+    answer = invoke_with_history(_agent, req.message, session_id)
+    chat_session_service.touch_session(db, session_id, first_message=req.message)
+    return ChatResponse(response=answer, session_id=session_id)
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+# Maps stream_agent_events' event "type" to the SSE event: name sent to
+# the client - kept as "token" (not "answer") for the final-answer text
+# to match the existing wire contract from before tool-call/reasoning
+# events were added.
+_SSE_EVENT_NAME = {
+    "answer": "token",
+    "tool_call": "tool_call",
+    "tool_result": "tool_result",
+    "reasoning": "reasoning",
+}
 
 @router.get(
     "/chat/sessions",
@@ -115,3 +116,14 @@ def get_chat_session_messages(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
     messages = get_message_history(_agent, session_id)
     return ChatSessionMessages(session_id=session_id, messages=messages)
+
+
+@router.delete(
+    "/chat/sessions/{session_id}",
+    summary = "Delete a chat session",
+)
+def delete_chat_session(session_id: str, db: Session = Depends(get_db)):
+    if chat_session_service.get_session(db, session_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
+    else:
+        chat_session_service.delete_session(db, session_id)

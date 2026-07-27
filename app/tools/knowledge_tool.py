@@ -23,6 +23,7 @@ def search_sops(query: str) -> str:
     conn = vs.init_store()
     query_embedding = get_embeddings().embed_query(query)
     results = vs.search(conn, query_embedding, top_k=SOP_SEARCH_TOP_K)
+    # results = vs.max_marginal_relevance_search()
 
     if not results:
         return "No SOP documents have been ingested yet."
