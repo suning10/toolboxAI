@@ -40,5 +40,9 @@ def list_sessions(db: Session) -> list[ChatSession]:
 def get_session(db: Session, session_id: str) -> ChatSession | None:
     return db.get(ChatSession, session_id)
 
-def delete_session(db: Session, session_id: str) -> None:
-    db.delete(session_id);
+def delete_session(db: Session, session_id: str) -> ChatSession | None:
+    session = db.get(ChatSession, session_id)
+    if session is not None:
+        db.delete(session)
+        db.commit()
+    return session
