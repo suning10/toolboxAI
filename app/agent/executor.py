@@ -10,8 +10,6 @@ prompt.
 from datetime import datetime
 from langchain.agents import create_agent
 from app.llm.client import get_chat_model
-from app.tools.pandas_tool import describe_dataset, run_pandas_query
-from app.tools.sql_tool import run_sql_query
 from app.tools.inventory_tool import check_inventory_gap
 from app.tools.knowledge_tool import search_sops
 
@@ -43,7 +41,7 @@ the user instead of retrying indefinitely.
 # Keep the toolset small and focused. Local models degrade in tool-call
 # reliability once you hand them many tools at once - three well-scoped
 # tools beats ten loosely-scoped ones.
-TOOLS = [run_sql_query, check_inventory_gap, search_sops]
+TOOLS = [check_inventory_gap, search_sops]
 
 
 def build_agent():
