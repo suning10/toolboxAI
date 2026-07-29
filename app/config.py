@@ -7,6 +7,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Which chat model provider app/llm/client.py builds - "ollama" (default,
+# self-hosted/free), "anthropic", "openai", or "google". Switching
+# providers later is just changing this one var (plus that provider's
+# API key) - nothing else in the app (agent, tools, streaming) is
+# provider-specific.
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "ollama")
+
 # Point this at your Ollama endpoint - localhost if Ollama runs on the same
 # box as the app, or the EC2 private IP / DNS if the app and model are on
 # separate hosts.
@@ -18,8 +25,40 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # reliable open models for tool calling.
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:0.8b")
 
+# Only used when MODEL_PROVIDER=anthropic. Reads ANTHROPIC_API_KEY from
+# the environment automatically if unset here - see langchain-anthropic's
+# ChatAnthropic. claude-opus-4-8 is Anthropic's current recommended
+# default model as of this writing; check platform.claude.com for
+# updates before assuming it's still current.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
+
+# Only used when MODEL_PROVIDER=openai. Reads OPENAI_API_KEY from the
+# environment automatically if unset here. gpt-4.1 is a conservative,
+# known-stable default - check platform.openai.com/docs/models for
+# OpenAI's current recommended flagship before assuming it's still best.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1")
+
+# Only used when MODEL_PROVIDER=google. Reads GOOGLE_API_KEY from the
+# environment automatically if unset here - see langchain-google-genai's
+# ChatGoogleGenerativeAI. Check ai.google.dev/gemini-api/docs/models for
+# Google's current recommended model before assuming gemini-3.5-flash
+# is still current.
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-3.5-flash")
+
 # Set temperature low for analytics/tool-calling tasks - you want
-# deterministic tool selection, not creative variation.
+# deterministic tool selection, not creative variation. Only applied
+# for MODEL_PROVIDER=ollama:
+# - Claude Opus 4.7+/4.8/Sonnet 5 reject a temperature override outright
+#   (400 error) rather than ignoring it.
+# - Gemini 3.0+ models default to temperature=1.0 when unset, and
+#   Google's own docs warn that forcing a low value like 0 or 0.7 "can
+#   cause infinite loops, degraded reasoning performance, and failure
+#   on complex tasks."
+# Recent OpenAI reasoning models are similarly restrictive. app/llm/client.py
+# never passes this param to ChatAnthropic/ChatGoogleGenerativeAI/ChatOpenAI.
 MODEL_TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", "0"))
 
 # Simple API key check for the FastAPI layer. Replace with real auth
@@ -66,3 +105,13 @@ SOP_SEARCH_TOP_K = int(os.getenv("SOP_SEARCH_TOP_K", "4"))
 # INFO is the usual default; use WARNING in production if you only
 # want problems surfaced.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# MySQL access via the mysql_mcp_server MCP server (spawned over stdio
+# through `uvx`, see app/tools/mysql_mcp_tool.py). Leave MYSQL_HOST unset
+# to skip loading MySQL tools entirely - the app runs fine without it,
+# same as the other optional integrations above.
+MYSQL_HOST = os.getenv("MYSQL_HOST", "")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_USER = os.getenv("MYSQL_USER", "")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "")

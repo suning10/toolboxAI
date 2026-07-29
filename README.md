@@ -18,6 +18,34 @@ answer questions over uploaded CSV/Excel data using pandas and SQL tools.
    silently fail or the model will just respond with text instead of
    invoking your functions.
 
+### Switching model providers
+
+`app/llm/client.py` builds the chat model based on `MODEL_PROVIDER` - the
+rest of the app (agent, tools, streaming) is provider-agnostic and doesn't
+change:
+
+```bash
+MODEL_PROVIDER=ollama      # default - self-hosted, no API key needed
+MODEL_PROVIDER=anthropic   # requires ANTHROPIC_API_KEY; ANTHROPIC_MODEL defaults to claude-opus-4-8
+MODEL_PROVIDER=openai      # requires OPENAI_API_KEY; OPENAI_MODEL defaults to gpt-4.1
+MODEL_PROVIDER=google      # requires GOOGLE_API_KEY; GOOGLE_MODEL defaults to gemini-3.5-flash
+```
+
+Caveats:
+- `MODEL_TEMPERATURE` only applies to Ollama:
+  - Current Claude models (Opus 4.7+/4.8, Sonnet 5) reject a
+    `temperature` override with a 400 rather than ignoring it.
+  - Gemini 3.0+ models default to `temperature=1.0` when unset, and
+    Google's own docs warn that forcing a low value (0 or 0.7) "can
+    cause infinite loops, degraded reasoning performance, and failure
+    on complex tasks."
+  - `app/llm/client.py` never passes `temperature` to `ChatAnthropic`
+    or `ChatGoogleGenerativeAI` for these reasons.
+- `include_reasoning` on `/admin/ai/chat/stream` (see Streaming below)
+  currently only surfaces reasoning tokens for Ollama "thinking" models -
+  Anthropic/OpenAI/Google expose reasoning differently and aren't wired
+  up for that yet.
+
 ## Setup
 
 ```bash
@@ -172,7 +200,9 @@ app/
 │   ├── pandas_tool.py      dataframe query tool
 │   ├── sql_tool.py         SQL query tool (in-memory SQLite)
 │   ├── inventory_tool.py   inventory gap check by date + SLOC (calls external REST API)
-│   └── knowledge_tool.py   search_sops - runtime query side of the SOP knowledge base
+│   ├── knowledge_tool.py   search_sops - runtime query side of the SOP knowledge base
+│   └── mysql_mcp_tool.py   MySQL tools via mysql_mcp_server (MCP, over stdio) -
+│                            read-only guard on execute_sql; opt-in via MYSQL_HOST
 ├── knowledge/
 │   ├── chunking.py         paragraph-aware text chunker
 │   ├── vector_store.py     sqlite-vec backed chunk/embedding store
@@ -229,6 +259,22 @@ app/
 - The SOP knowledge base (`app/knowledge/`) only supports `.txt`/`.md`
   ingestion for now. Add a PDF/DOCX extractor to `ingest.py` if SOPs live
   in those formats.
+- MySQL access (`app/tools/mysql_mcp_tool.py`) is opt-in: set `MYSQL_HOST`,
+  `MYSQL_PORT` (default `3306`), `MYSQL_USER`, `MYSQL_PASSWORD`, and
+  optionally `MYSQL_DATABASE` to enable it - leave `MYSQL_HOST` unset and
+  the app runs exactly as before, no MySQL tools loaded. Requires `uvx`
+  (ships with `uv`, already used by this project) to fetch and run
+  [mysql_mcp_server](https://github.com/designcomputer/mysql_mcp_server)
+  on demand - no separate install step. `execute_sql` is restricted to
+  `SELECT`/`SHOW`/`DESCRIBE`/`EXPLAIN` by an application-level guard (the
+  real server itself allows writes) - see the **STUB CONTRACT WARNING**
+  in `mysql_mcp_tool.py`'s docstring: the tool/arg names there are taken
+  from that server's README, not verified live (no MySQL available in
+  this dev environment) - confirm they match once you point this at a
+  real database. Also note: `langchain-mcp-adapters==0.3.1` requires
+  `mcp<2.0.0` pinned in `pyproject.toml` - its `mcp.server.fastmcp` import
+  breaks against `mcp==2.0.0`'s breaking changes; re-check that pin
+  before upgrading either package.
 - No LangSmith tracing wired in - useful once you're debugging why the
   agent picked a specific tool call; set `LANGCHAIN_TRACING_V2=true` and
   `LANGCHAIN_API_KEY` env vars to enable it with zero code changes.
