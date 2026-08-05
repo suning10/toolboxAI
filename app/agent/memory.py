@@ -37,6 +37,7 @@ def build_agent_with_memory():
         tools=TOOLS,
         system_prompt=SYSTEM_PROMPT,
         checkpointer=checkpointer,
+#        middleware=
     )
     return agent
 
