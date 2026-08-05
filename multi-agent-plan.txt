@@ -1,0 +1,85 @@
+
+
+     Graph shape
+
+     START -> supervisor -> (retrieval_agent | api_agent | response_agent)   [conditional edge on state["next"]]
+     retrieval_agent -> supervisor
+     api_agent -> supervisor
+     response_agent -> END
+
+     - State: class AgentGraphState(MessagesState): next: str - plain messages (shared conversation, add_messages reducer) plus a routing field.
+     - supervisor node: a bare LLM call (no tools) using .with_structured_output(Route) where Route is a small Pydantic model with next: Literal["retrieval_agent", "api_agent",
+     "response_agent"]. Returns {"next": decision} only - never touches "messa Jump to bottom (click) ↓ never pollutes the conversation the other nodes see.
+
+
+
+
+
+     Testing
+
+     - tests/test_chat_stream.py - full rewrite of its fixtures for the new multi-node graph: a fake supervisor model (structured-output stand-in returning routing decisions in
+     sequence), fake retrieval/api specialist models (same pattern as the two-call tool-then-wrapup fakes already used in this file today), a fake response model with a real _stream
+     implementation. Reuse the exact prototyping patterns already verified above. Cases to cover: routing straight to response_agent (no tools needed), routing through
+     retrieval_agent then response_agent, tool-call/tool-result event shape from a specialist, and that specialist wrap-up text never becomes a token/answer event.
+     - tests/test_chat_history.py - existing touch_session/title tests unaffec Jump to bottom (click) ↓ ding a state with two consecutive assistant messages in one turn and
+                                                                                                                                   copied 2839 chars to clipboard
+
+START -> supervisor -> (retrieval_agent | api_agent | response_agent)   [conditional edge on state["next"]]
+     retrieval_agent -> supervisor
+     api_agent -> supervisor
+     response_agent -> END
+
+     - State: class AgentGraphState(MessagesState): next: str - plain messages (shared conversation, add_messages reducer) plus a routing field.
+     - supervisor node: a bare LLM call (no tools) using .with_structured_output(Route) where Route is a small Pydantic model with next: Literal["retrieval_agent", "api_agent",
+     "response_agent"]. Returns {"next": decision} only - never touches "messages", so its routing text never pollutes the conversation the other nodes see.
+     - retrieval_agent node: create_agent(model=..., tools=[search_sops], system_prompt=RETRIEVAL_SYSTEM_PROMPT) - added directly as a graph node (no checkpointer of its own; only
+     the outer graph is checkpointed). ───
+
+      - api_agent node: create_agent(model=..., tools=[check_inventory_gap, check_inventory_gap_for_sku, check_top_inventory_gap], system_prompt=API_SYSTEM_PROMPT) - same pattern.
+     - response_agent node: a plain function - model.invoke([SystemMessage(RESPONSE_SYSTEM_PROMPT)] + state["messages"]) - no tools bound at all. This is the only node whose output
+     streams as the final token events and whose message becomes the true answer.
+     - Both retrieval_agent and api_agent edge back to supervisor (so the supervisor can chain retrieval -> api -> response if a question needs both, or go straight to
+     response_agent for anything that doesn't need tools at all). Relying on LangGraph's default recursion_limit (25) as the loop safety net rather than adding custom loop-counting
+     - keeps this "simple" per the request; can tighten later if the small model loops.
+
+     System prompts (replacing the single flat SYSTEM_PROMPT)
+
+     Four focused prompts in app/agent/executor.py, replacing today's one-size
+       - SUPERVISOR_SYSTEM_PROMPT - coarse routing only: SOP/procedure/"how do I" questions -> retrieval_agent; inventory/SCR/gap/SKU questions -> api_agent; anything else, or once
+     enough info has been gathered -> response_agent.
+     - RETRIEVAL_SYSTEM_PROMPT - carries today's search_sops guidance (cite doc titles, say so if nothing relevant comes back).
+     - API_SYSTEM_PROMPT - carries today's "keep tool calls minimal, retry once on error" framing. The detailed inter-tool disambiguation (SKU vs SLOC vs top-gap) already lives in
+     each tool's own docstring per app/tools/inventory_tool.py and stays there unchanged - create_agent()'s ReAct loop reads those directly.
+     - RESPONSE_SYSTEM_PROMPT - new. Explicitly told it has no tools and must synthesize a clear, formatted final answer from whatever the conversation already contains (user
+     question + any retrieval/api results) - not call anything, not repeat raw tool output verbatim.
+
+     Files to change
+      app/agent/executor.py - replace the single-agent build_agent() with:
+     - The 4 system prompts above.
+     - TOOLS_RETRIEVAL = [search_sops], TOOLS_API = [check_inventory_gap, check_inventory_gap_for_sku, check_top_inventory_gap] (splits today's flat TOOLS list).
+     - build_graph(checkpointer=None) - constructs the StateGraph described above and returns graph.compile(checkpointer=checkpointer). This is a new shared builder so the
+     construction logic isn't duplicated between executor.py and memory.py the way today's single create_agent(...) call already is (both files currently build their own copy) - the
+     multi-agent version is enough more code that duplicating it isn't worth it.
+     - build_agent() becomes a thin wrapper: return build_graph() (no checkpointer) - keeps the existing external function name/contract for anything still calling it.
+
+app/agent/memory.py:
+     - build_agent_with_memory() - calls app.agent.executor.build_graph(checkpointer=SqliteSaver(conn)) instead of its own duplicated create_agent(...) call. Everything else here
+     (the sqlite connection setup) stays the same.
+     - stream_agent_events() - rewrite the event-classification filter using the verified behavior above:
+       - tool_call: isinstance(chunk, AIMessage) and chunk.tool_calls and metadata.get("langgraph_node") in {"retrieval_agent", "api_agent"} -> iterate chunk.tool_calls, yield one
+     {"type": "tool_call", "tool": tc["name"]} per entry (simpler than today - no more partial tool_call_chunks accumulation/dedup, since these arrive as one complete message).
+       - tool_result: same as today, isinstance(chunk, ToolMessage), just drop the langgraph_node == "tools" equality check (that was create_agent()'s fixed internal name; here it's
+     the parent's node name that shows up, and any ToolMessage is unambiguous on its own).
+       - answer/token: only AIMessageChunks tagged metadata.get("langgraph_node") == "response_agent" - this is the one behavioral tightening: retrieval/api agents' own wrap-up
+     commentary (e.g. "Found relevant SOP info.") is no longer treated as user-facing answer text, matching the new architecture's intent that only the response agent produces the
+     final answer.
+       - reasoning: unchanged mechanism (chunk.additional_kwargs.get("reasonin Jump to bottom (click) ↓ ted to response_agent alongside the answer check.
+
+          - get_message_history() - per your confirmed answer, collapse consecutive "assistant"-role entries within a turn down to just the last one, so a specialist's wrap-up message
+     never shows up as a separate turn in GET /chat/sessions/{id}/messages - only the response agent's true final answer does (it's always the last assistant message before the next
+     human message or end of list, since response_agent is the guaranteed terminal node). Implemented as a simple "replace last entry if it's also assistant" step while building
+     the history list - no new tagging/state needed, and it's a no-op for today's already-single-assistant-message-per-turn shape (existing tests keep passing unchanged).
+
+     No changes needed: app/api/v1/endpoints/chat.py (same _agent.invoke()/.stream()/.get_state() contract), app/llm/client.py, app/tools/*, app/db/*, app/knowledge/*,
+     app/schemas/*.
+     Jump to bottom (click) ↓  ───────────────────────────────────────────────
